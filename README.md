@@ -1,7 +1,5 @@
 # ParticleVolumeRenderer
 
-==========
-
 ![Particle volume rendering](./optixParticleVolumes.png)
 
 Three-dimensional radial basis function (RBF) volume rendering within a ray tracer. 
