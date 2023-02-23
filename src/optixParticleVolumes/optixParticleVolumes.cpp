@@ -77,7 +77,7 @@ std::map<int, ParticleFrameData> dataCache;
 
 const char* const SAMPLE_NAME = "optixParticleVolumes";
 const unsigned int WIDTH  = 1024u;
-const unsigned int HEIGHT = 768u;
+const unsigned int HEIGHT = 1024u;
 
 struct ParticlesBuffer
 {
@@ -95,7 +95,7 @@ struct ParticlesBuffer
 
 Context         context;
 uint32_t        width  = 1024u;
-uint32_t        height = 768u;
+uint32_t        height = 1024u;
 bool            use_pbo = true;
 bool            rbfs = true;
 bool            particles_file_colors = false;
@@ -103,7 +103,7 @@ bool            particles_file_radius = false;
 bool            particles_file_velocities = false;
 bool            camera_slow_rotate = true;
 size_t          max_particles = 0;
-float           fixed_radius = 100.f;
+float           fixed_radius = 0.015f;
 float           particlesPerSlab = 16.f;
 float           wScale = 3.5f;
 float           opacity = .5f;
@@ -220,24 +220,26 @@ void usageReportCallback( int lvl, const char* tag, const char* msg, void* cbdat
 
 void setParticlesBaseName( const std::string &particles_file )
 {
-    // gets the base name by stripping the suffix and the number, if there is no number
-    // then there will be no sequence
-    std::string::size_type first_dot_pos  = particles_file.find( "." );
-    std::string::size_type second_dot_pos = particles_file.rfind( "." );
+    current_particle_frame = 0;
+    particles_file_base = particles_file;
+    return;
+    
+    // // gets the base name by stripping the suffix and the number, if there is no number
+    // // then there will be no sequence
+    // std::string::size_type first_dot_pos  = particles_file.find( "." );
+    // std::string::size_type second_dot_pos = particles_file.rfind( "." );
 
-    particles_file_extension = particles_file.substr( second_dot_pos+1 );
+    // particles_file_extension = particles_file.substr( second_dot_pos+1 );
 
-    if ( ( first_dot_pos == std::string::npos ) || ( first_dot_pos == second_dot_pos ) ) {
-        // either there are no dots in the name or there is just one, it won't be a sequence
-        current_particle_frame = 0;
-        particles_file_base = particles_file;
-        return;
-    }
+    // if ( ( first_dot_pos == std::string::npos ) || ( first_dot_pos == second_dot_pos ) ) {
+    //     // either there are no dots in the name or there is just one, it won't be a sequence
+        
+    // }
 
-    std::string frame_str = particles_file.substr( first_dot_pos+1, second_dot_pos-first_dot_pos-1 );
+    // std::string frame_str = particles_file.substr( first_dot_pos+1, second_dot_pos-first_dot_pos-1 );
 
-    current_particle_frame = atoi( frame_str.c_str() );
-    particles_file_base = particles_file.substr( 0, first_dot_pos );
+    // current_particle_frame = atoi( frame_str.c_str() );
+    // particles_file_base = particles_file.substr( 0, first_dot_pos );
 }
 
 
@@ -404,245 +406,145 @@ void readFile( std::vector<float4>& positions,
                float3& bbox_min, 
                float3& bbox_max )
 {
-	//read raw data file.
-    if (particles_file_extension == "raw")
-    {
-        std::cout << "Reading raw file" << particles_file << std::endl;
+	std::cout << "Reading txt file" << particles_file << std::endl;
 
-        FILE* fp = fopen(particles_file.c_str(), "r");
-        fseek(fp, 0L, SEEK_END);
-        size_t sz = ftell(fp);
-        rewind(fp);
+	std::string filename = particles_file_base;
 
-        size_t numParticles = sz / 16;
-        std::cout << "# particles = " << numParticles << std::endl;
+	if (current_particle_frame > 0) {
+		std::ostringstream s;
+		s << current_particle_frame;
 
-        if (max_particles > 0 && numParticles > max_particles)
-        {
-          std::cout << "only reading " << max_particles << " particles." << std::endl;
-          numParticles = max_particles;
-        }
-
-        positions.resize(numParticles);
-        size_t b = fread(&positions[0], sizeof(float), numParticles, fp);
-        fclose(fp);
-
-        float4 pmin, pmax;
-
-        pmin.x = pmin.y = pmin.z = pmin.w = 1e16f;
-        pmax.x = pmax.y = pmax.z = pmax.w = -1e16f;
-
-        const float rd = fixed_radius;
-
-        #pragma omp parallel for
-        for(size_t i=0; i<numParticles; i++)
-        {
-            const float4& p = positions[i];
-
-            pmin.x = fminf(pmin.x, p.x);
-            pmin.y = fminf(pmin.y, p.y);
-            pmin.z = fminf(pmin.z, p.z);
-            pmin.w = fminf(pmin.w, p.w);
-
-            pmax.x = fmaxf(pmax.x, p.x);
-            pmax.y = fmaxf(pmax.y, p.y);
-            pmax.z = fmaxf(pmax.z, p.z);
-            pmax.w = fmaxf(pmax.w, p.w);
-        }
-
-        std::cout << "Particle pmin = " << pmin << std::endl;
-        std::cout << "Particle pmax = " << pmax << std::endl;
-
-        bbox_min = make_float3(pmin.x - rd, pmin.y - rd, pmin.z - rd);
-        bbox_max = make_float3(pmax.x + rd, pmax.y + rd, pmax.z + rd);
-
-        if (fixed_radius == 0.f)
-          fixed_radius = length(bbox_max - bbox_min) / powf(float(numParticles), 0.33333f);  
-
-        std::cout << "Particle fixed_radius = " << fixed_radius << std::endl;
-
-        float wRange, wOff;
-        if (pmin.w < 0.f)
-        {
-          if (-pmin.w > pmax.w)
-            wRange = float(0.5f / -pmin.w);
-          else
-            wRange = float(0.5f / pmax.w);
-
-          tf_type = 3;
-          wOff = .5f;
-        }
-        else
-        {
-          wRange = float( 1.0 / double(pmax.w - pmin.w) );
-          wOff = 0.f;
-        }
-
-        std::cout << "Transfer function tf_type = " << tf_type << std::endl;
-
-        #pragma omp parallel for
-        for(size_t i=0; i<numParticles; i++)
-            positions[i].w = positions[i].w * wRange + wOff;
-
-        float wmin = 1e16f;
-        float wmax = -1e16f;
-        for(size_t i=0; i<numParticles; i++){
-            wmin = fminf(wmin, positions[i].w);
-            wmax = fmaxf(wmax, positions[i].w);
-        }
-        std::cout << "Attribute range wmin = " << wmin << ", wmax = " << wmax << std::endl;
-    }
-     
-    //read txt data file
-    else
-    {
-        std::cout << "Reading txt file" << particles_file << std::endl;
-
-        std::string filename = particles_file_base;
-
-        if ( current_particle_frame > 0 ) {
-            std::ostringstream s;
-            s << current_particle_frame;
-
-            if ( current_particle_frame < 10 )
-                filename += ".000" + s.str() + ".txt";
-            else
-                filename += ".00" + s.str() + ".txt";
-        }
-        else
-            filename = particles_file_base;
+		if (current_particle_frame < 10)
+			filename += ".000" + s.str() + ".txt";
+		else
+			filename += ".00" + s.str() + ".txt";
+	}
+	else
+		filename = particles_file_base;
 
 
-        std::ifstream ifs( filename.c_str() );
+	std::ifstream ifs(filename.c_str());
 
-        bbox_min.x = bbox_min.y = bbox_min.z = 1e16f;
-        bbox_max.x = bbox_max.y = bbox_max.z = -1e16f;
+	bbox_min.x = bbox_min.y = bbox_min.z = 1e16f;
+	bbox_max.x = bbox_max.y = bbox_max.z = -1e16f;
 
-        int maxchars = 8192;
-        std::vector<char> buf(static_cast<size_t>(maxchars)); // Alloc enough size
+	int maxchars = 8192;
+	std::vector<char> buf(static_cast<size_t>(maxchars)); // Alloc enough size
 
-        float wmin = 1e16f;
-        float wmax = -1e16f;
+	float wmin = 1e16f;
+	float wmax = -1e16f;
 
-        while ( ifs.peek() != -1 ) {
-            ifs.getline( &buf[0], maxchars );
+	while (ifs.peek() != -1) {
+		ifs.getline(&buf[0], maxchars);
 
-            std::string linebuf(&buf[0]);
+		std::string linebuf(&buf[0]);
 
-            // Trim newline '\r\n' or '\n'
-            if ( linebuf.size() > 0 ) {
-                if ( linebuf[linebuf.size() - 1] == '\n' )
-                    linebuf.erase(linebuf.size() - 1);
-            }
+		// Trim newline '\r\n' or '\n'
+		if (linebuf.size() > 0) {
+			if (linebuf[linebuf.size() - 1] == '\n')
+				linebuf.erase(linebuf.size() - 1);
+		}
 
-            if ( linebuf.size() > 0 ) {
-                if ( linebuf[linebuf.size() - 1] == '\r' )
-                    linebuf.erase( linebuf.size() - 1 );
-            }
+		if (linebuf.size() > 0) {
+			if (linebuf[linebuf.size() - 1] == '\r')
+				linebuf.erase(linebuf.size() - 1);
+		}
 
-            // Skip if empty line.
-            if ( linebuf.empty() ) {
-                continue;
-            }
+		// Skip if empty line.
+		if (linebuf.empty()) {
+			continue;
+		}
 
-            // Skip leading space.
-            const char *token = linebuf.c_str();
-            token += strspn( token, " \t" );
+		// Skip leading space.
+		const char *token = linebuf.c_str();
+		token += strspn(token, " \t");
 
-            assert( token );
-            if ( token[0] == '\0' )
-                continue; // empty line
+		assert(token);
+		if (token[0] == '\0')
+			continue; // empty line
 
-            if ( token[0] == '#' )
-                continue; // comment line
+		if (token[0] == '#')
+			continue; // comment line
 
-            // meaningful line here. The expected format is: position, velocity, color and radius
+		// meaningful line here. The expected format is: position, velocity, color and radius
 
-            // position
-            float x  = parseFloat( token );
-            float y  = parseFloat( token );
-            float z  = parseFloat( token );
+		// position
+		float x = parseFloat(token);
+		float y = parseFloat(token);
+		float z = parseFloat(token);
 
-            // velocity
-            float vx = parseFloat( token );
-            float vy = parseFloat( token );
-            float vz = parseFloat( token );
+		// velocity
+		float vel_magnitude = parseFloat(token);
 
-            float3 vel = make_float3(vx,vy,vz);
-            float vel_magnitude = length(vel);
+		wmin = fminf(wmin, vel_magnitude);
+		wmax = fmaxf(wmax, vel_magnitude);
 
-            wmin = fminf(wmin, vel_magnitude);
-            wmax = fmaxf(wmax, vel_magnitude);
+		float r, g, b;
+		r = g = b = .9f;
 
-            float r,g,b;
-            r=g=b=.9f;
+		if (particles_file_colors)
+		{
+			// color
+			r = parseFloat(token);
+			g = parseFloat(token);
+			b = parseFloat(token);
+		}
 
-            if (particles_file_colors)
-            {
-              // color
-              r  = parseFloat( token );
-              g  = parseFloat( token );
-              b  = parseFloat( token );
-            }
-            
-            float rd = fixed_radius;
-            if (particles_file_radius)
-            {
-              // radius
-              rd = parseFloat( token );
-            }
+		float rd = fixed_radius;
+		if (particles_file_radius)
+		{
+			// radius
+			rd = parseFloat(token);
+		}
 
-            positions.push_back( make_float4( x, y, z, vel_magnitude ) );
-            velocities.push_back( make_float3( vx, vy, vz ) );
-            colors.push_back( make_float3( r, g, b ) );
-            radii.push_back( rd );
-        }
+		positions.push_back(make_float4(x, y, z, vel_magnitude));
+// 		velocities.push_back(make_float3(vx, vy, vz));
+		colors.push_back(make_float3(r, g, b));
+		radii.push_back(rd);
+	}
 
-        const size_t numParticles = positions.size();
-        std::cout << "# particles = " << numParticles << std::endl;
+	const size_t numParticles = positions.size();
+	std::cout << "# particles = " << numParticles << std::endl;
 
-        float4 pmin, pmax;
-        pmin.x = pmin.y = pmin.z = pmin.w = 1e16f;
-        pmax.x = pmax.y = pmax.z = pmax.w = -1e16f;
+	float4 pmin, pmax;
+	pmin.x = pmin.y = pmin.z = pmin.w = 1e16f;
+	pmax.x = pmax.y = pmax.z = pmax.w = -1e16f;
 
-        for(size_t i=0; i<numParticles; i++)
-        {
-            const float4& p = positions[i];
+	for (size_t i = 0; i < numParticles; i++)
+	{
+		const float4& p = positions[i];
 
-            pmin.x = fminf(pmin.x, p.x);
-            pmin.y = fminf(pmin.y, p.y);
-            pmin.z = fminf(pmin.z, p.z);
-            pmin.w = fminf(pmin.w, p.w);
+		pmin.x = fminf(pmin.x, p.x);
+		pmin.y = fminf(pmin.y, p.y);
+		pmin.z = fminf(pmin.z, p.z);
+		pmin.w = fminf(pmin.w, p.w);
 
-            pmax.x = fmaxf(pmax.x, p.x);
-            pmax.y = fmaxf(pmax.y, p.y);
-            pmax.z = fmaxf(pmax.z, p.z);
-            pmax.w = fmaxf(pmax.w, p.w);
-        }
+		pmax.x = fmaxf(pmax.x, p.x);
+		pmax.y = fmaxf(pmax.y, p.y);
+		pmax.z = fmaxf(pmax.z, p.z);
+		pmax.w = fmaxf(pmax.w, p.w);
+	}
 
-        std::cout << "Particle pmin = " << pmin << std::endl;
-        std::cout << "Particle pmax = " << pmax << std::endl;
+	std::cout << "Particle pmin = " << pmin << std::endl;
+	std::cout << "Particle pmax = " << pmax << std::endl;
 
-        bbox_min = make_float3(pmin.x, pmin.y, pmin.z);
-        bbox_max = make_float3(pmax.x, pmax.y, pmax.z);
+	bbox_min = make_float3(pmin.x, pmin.y, pmin.z);
+	bbox_max = make_float3(pmax.x, pmax.y, pmax.z);
 
-        if (fixed_radius == 0.f)
-          fixed_radius = length(bbox_max - bbox_min) / powf(float(numParticles), 0.333333f);  
+	if (fixed_radius == 0.f)
+		fixed_radius = length(bbox_max - bbox_min) / powf(float(numParticles), 0.333333f);
 
-        std::cout << "Using fixed_radius = " << fixed_radius << std::endl;
+	std::cout << "Using fixed_radius = " << fixed_radius << std::endl;
 
-        bbox_min -= make_float3(fixed_radius);
-        bbox_max += make_float3(fixed_radius);
+	bbox_min -= make_float3(fixed_radius);
+	bbox_max += make_float3(fixed_radius);
 
-        std::cout << "Attribute range wmin = " << wmin << ", wmax = " << wmax << std::endl;
+	std::cout << "Attribute range wmin = " << wmin << ", wmax = " << wmax << std::endl;
 
-        float wRange = float( 1.0 / double(wmax - wmin) );
-
-        //#pragma omp parallel for
-        for(size_t i=0; i<positions.size(); i++)
-            positions[i].w = positions[i].w * wRange;
-    }
-
+	//#pragma omp parallel for
+	for (size_t i = 0; i < positions.size(); i++)
+// 		positions[i].w = positions[i].w / 4067.0f;
+        positions[i].w = 0.15f;
 }
 
 
@@ -743,7 +645,7 @@ void setupCamera()
 {
     const float max_dim = fmaxf( aabb.extent( 0 ), aabb.extent( 1 ) ); // max of x, y components
 
-    camera_eye    = aabb.center() + make_float3( 0.0f, 0.0f, max_dim*1.1f );
+    camera_eye    = aabb.center() + make_float3( max_dim*1.5f, 0.0f, max_dim*2.0f );
     camera_lookat = aabb.center();
     camera_up     = make_float3( 0.0f, 1.0f, 0.0f );
 
@@ -1084,7 +986,6 @@ void printUsageAndExit( const std::string& argv0 )
 int main( int argc, char** argv )
  {
     std::string out_file;
-    particles_file = std::string( sutil::samplesDir() ) + "/data/darksky_1M.xyz";
     int usage_report_level = 0;
     for( int i=1; i<argc; ++i )
     {
@@ -1093,6 +994,15 @@ int main( int argc, char** argv )
         if( arg == "-h" || arg == "--help" )
         {
             printUsageAndExit( argv[0] );
+        }
+        else if( arg == "-i" || arg == "--input" )
+        {
+            if( i == argc-1 )
+            {
+                std::cout << "Option '" << arg << "' requires additional argument.\n";
+                printUsageAndExit( argv[0] );
+            }
+            particles_file = argv[++i];
         }
         else if( arg == "-f" || arg == "--file"  )
         {
@@ -1237,7 +1147,7 @@ int main( int argc, char** argv )
         }
         else
         {
-            updateCamera();
+            // updateCamera();
             context->launch( 0, width, height );
             sutil::writeBufferToFile( out_file.c_str(), getOutputBuffer() );
             std::cout << "Wrote " << out_file << std::endl;
