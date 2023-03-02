@@ -839,8 +839,8 @@ BB3_11:
 	ret;
 }
 
-	.file	1 "/users/PAS0027/trainsn/opengl/particle_volume/src/sutil/phong.cu", 1649365677, 3096
-	.file	2 "/users/PAS0027/trainsn/opengl/particle_volume/src/sutil/phong.h", 1649365677, 4570
+	.file	1 "/users/PAS0027/trainsn/opengl/nyx_particle_volume/src/sutil/phong.cu", 1649365677, 3096
+	.file	2 "/users/PAS0027/trainsn/opengl/nyx_particle_volume/src/sutil/phong.h", 1649365677, 4570
 	.file	3 "/users/PAS0027/trainsn/software/NVIDIA-OptiX-SDK-5.0.0-linux64/include/optix_device.h", 1513304065, 114607
 	.file	4 "/usr/local/cuda/10.2.89/include/texture_fetch_functions.h", 1586813352, 31897
 	.file	5 "/users/PAS0027/trainsn/software/NVIDIA-OptiX-SDK-5.0.0-linux64/include/internal/optix_datatypes.h", 1513304065, 5083

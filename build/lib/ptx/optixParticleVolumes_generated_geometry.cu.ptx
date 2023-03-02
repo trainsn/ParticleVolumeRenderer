@@ -207,7 +207,7 @@ BB0_3:
 	ret;
 }
 
-	.file	1 "/users/PAS0027/trainsn/opengl/particle_volume/src/optixParticleVolumes/geometry.cu", 1649365676, 2860
+	.file	1 "/users/PAS0027/trainsn/opengl/nyx_particle_volume/src/optixParticleVolumes/geometry.cu", 1649365676, 2860
 	.file	2 "/users/PAS0027/trainsn/software/NVIDIA-OptiX-SDK-5.0.0-linux64/include/optix_device.h", 1513304065, 114607
 	.file	3 "/users/PAS0027/trainsn/software/NVIDIA-OptiX-SDK-5.0.0-linux64/include/internal/optix_datatypes.h", 1513304065, 5083
 	.file	4 "/users/PAS0027/trainsn/software/NVIDIA-OptiX-SDK-5.0.0-linux64/include/internal/optix_internal.h", 1513304065, 16358

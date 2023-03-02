@@ -154,7 +154,7 @@ void createContext( int usage_report_level, UsageReportLogger* logger );
 void loadMesh( const std::string& filename );
 void setupCamera();
 void setupLights();
-void updateCamera();
+void updateCamera(float phi, float theta);
 
 
 //------------------------------------------------------------------------------
@@ -653,6 +653,7 @@ void setupCamera()
 }
 
 
+
 void setupLights()
 {
     const float max_dim = fmaxf( aabb.extent( 0 ), aabb.extent (1 ) ); // max of x, y components
@@ -677,29 +678,21 @@ void setupLights()
 }
 
 
-void updateCamera()
+void updateCamera(float phi, float theta)
 {
     const float vfov = 35.0f;
     const float aspect_ratio = static_cast<float>(width) /
                                static_cast<float>(height);
 
     float3 camera_u, camera_v, camera_w;
-    sutil::calculateCameraVariables(
-            camera_eye, camera_lookat, camera_up, vfov, aspect_ratio,
-            camera_u, camera_v, camera_w, true );
+     
+    const float max_dim = fmaxf( aabb.extent( 0 ), aabb.extent( 1 ) ); // max of x, y components
+    const float dist = max_dim * 2.5f;
 
-    const Matrix4x4 frame = Matrix4x4::fromBasis(
-            normalize( camera_u ),
-            normalize( camera_v ),
-            normalize( -camera_w ),
-            camera_lookat);
-    const Matrix4x4 frame_inv = frame.inverse();
-    // Apply camera rotation twice to match old SDK behavior
-    const Matrix4x4 trans     = frame*camera_rotate*camera_rotate*frame_inv;
-
-    camera_eye    = make_float3( trans*make_float4( camera_eye,    1.0f ) );
-    camera_lookat = make_float3( trans*make_float4( camera_lookat, 1.0f ) );
-    camera_up     = make_float3( trans*make_float4( camera_up,     0.0f ) );
+    float3 direction = make_float3( sin(theta) * cos(phi) * dist, sin(theta) * sin(phi) * dist, cos(theta) * dist );
+    camera_eye    = aabb.center() + direction; 
+    camera_lookat = aabb.center();
+    camera_up     = make_float3( sin(theta - M_PI / 2) * cos(phi), sin(theta - M_PI / 2) * sin(phi), cos(theta - M_PI / 2) );
 
     sutil::calculateCameraVariables(
             camera_eye, camera_lookat, camera_up, vfov, aspect_ratio,
@@ -711,7 +704,6 @@ void updateCamera()
     context[ "U"   ]->setFloat( camera_u );
     context[ "V"   ]->setFloat( camera_v );
     context[ "W"   ]->setFloat( camera_w );
-
 }
 
 
@@ -985,7 +977,7 @@ void printUsageAndExit( const std::string& argv0 )
 
 int main( int argc, char** argv )
  {
-    std::string out_file;
+    std::string out_dir;
     int usage_report_level = 0;
     for( int i=1; i<argc; ++i )
     {
@@ -1011,7 +1003,7 @@ int main( int argc, char** argv )
                 std::cout << "Option '" << arg << "' requires additional argument.\n";
                 printUsageAndExit( argv[0] );
             }
-            out_file = argv[++i];
+            out_dir = argv[++i];
         }
         else if( arg == "--no_colors"  )
         {
@@ -1141,18 +1133,39 @@ int main( int argc, char** argv )
 
         context->validate();
 
-        if ( out_file.empty() )
+        if ( out_dir.empty() )
         {
             glfwRun( window, camera, render_buffers );
         }
         else
         {
-            // updateCamera();
-            context->launch( 0, width, height );
-            sutil::writeBufferToFile( out_file.c_str(), getOutputBuffer() );
-            std::cout << "Wrote " << out_file << std::endl;
-            destroyContext();
-
+            FILE* fp;
+        	char vp_path[1024];
+        	sprintf(vp_path, "%s/viewpoints.txt", out_dir.c_str());
+        	if (!(fp = fopen(vp_path, "r"))) {
+        		std::cout << "Error: opening viewpoint file failed" << std::endl;
+        		exit(EXIT_FAILURE);
+        	}
+        	int vpNum;
+	        fscanf(fp, "%d", &vpNum);
+	        
+	        float theta, phi;
+	        for (int idx = 0; idx < vpNum; idx++){
+	            fscanf(fp, "%f%f", &phi, &theta);
+	            
+	            phi = phi * M_PI / 180.0f;
+		        theta = theta * M_PI / 180.0f;
+		        
+		        updateCamera(phi, theta);
+		        context->launch( 0, width, height );
+		        
+		        std::stringstream ss;
+		        ss << out_dir << "/" << idx << ".png";
+		        std::string out_file = ss.str();
+                sutil::writeBufferToFile( out_file.c_str(), getOutputBuffer() );
+                // std::cout << "Wrote " << out_file << std::endl;
+	        }
+	        destroyContext();
         }
 
     }

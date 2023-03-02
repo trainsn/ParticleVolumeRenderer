@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <optixu/optixu_math_namespace.h>
@@ -313,10 +312,6 @@ const float wave[249][4] = {
       color = lerp4f( make_float4(0.f,0.f,1.f,.33f), make_float4(0.f,1.f,1.f,0.66f), (v-0.33f) * 3.f);
     else
       color = lerp4f( make_float4(0.f,1.f,0.f,0.5f), make_float4(1.f,1.f,1.f,1.f), (v-0.66f) * 3.f);
-  }
-  else
-  {
-    color = lerp4f( make_float4(0,0,1,0), make_float4(1,0,0,1), v);
   }
 
   //redshift

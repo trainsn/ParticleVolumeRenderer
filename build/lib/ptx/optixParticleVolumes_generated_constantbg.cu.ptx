@@ -66,5 +66,5 @@
 	ret;
 }
 
-	.file	1 "/users/PAS0027/trainsn/opengl/particle_volume/src/optixParticleVolumes/constantbg.cu", 1649365676, 1847
+	.file	1 "/users/PAS0027/trainsn/opengl/nyx_particle_volume/src/optixParticleVolumes/constantbg.cu", 1649365676, 1847
 

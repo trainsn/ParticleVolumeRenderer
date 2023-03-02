@@ -26,5 +26,5 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define SAMPLES_DIR "/users/PAS0027/trainsn/opengl/particle_volume/src"
-#define SAMPLES_PTX_DIR "/users/PAS0027/trainsn/opengl/particle_volume/build/lib/ptx"
+#define SAMPLES_DIR "/users/PAS0027/trainsn/opengl/nyx_particle_volume/src"
+#define SAMPLES_PTX_DIR "/users/PAS0027/trainsn/opengl/nyx_particle_volume/build/lib/ptx"
